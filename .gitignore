@@ -1,0 +1,21 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+
+# Uygulama verileri (kişisel anket verileri repoya girmez)
+anket_analiz/data/*.csv
+
+# Streamlit
+.streamlit/secrets.toml
+
+# Freebuff yerel çalışma dosyaları
+.freebuff/
+*.log
+gh_login.log
+
+# OS
+Thumbs.db
+.DS_Store
