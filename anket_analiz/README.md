@@ -27,9 +27,10 @@ Tarayıcı otomatik açılır (varsayılan `http://localhost:8501`). İnternet g
 | 🏠 Genel Bakış | Kayıt sayıları, ilçe/arazi dağılımları, sayısal özetler |
 | 📊 Tek Değişken | Her soru için kişi sayısı/yüzde tablosu + grafik |
 | 🔀 Çapraz Analiz | İki kategorik değişken; χ², sd, p, **Cramér's V**, yığılmış yüzde, ısı haritası, beklenen kişi sayısı uyarısı |
-| 📈 Sayısal × Grup | Grup ortalamaları + **ANOVA / Kruskal-Wallis**, kutu-keman grafikleri |
+| 📈 Sayısal × Grup | Grup ortalamaları + **ANOVA / Kruskal-Wallis**, kutu-keman grafikleri. Kapsam: **Çiftçi / Bayi / İkisi birlikte (birleşik)** — birleşik modda çiftçi ve bayi verileri aynı grafikte anket bazlı renkle karşılaştırılır |
 | 🔗 Korelasyon | **Pearson/Spearman** matrisi + ısı haritası, p değerli eşleşme tablosu, serpme grafiği |
 | 🧾 Likert | Madde dağılımları, ölçek ortalamaları, **Cronbach α** |
+| 🤝 Çiftçi ↔ Bayi | **Serbest seçimli** birleşik analiz: her iki anketten de istediğiniz değişkeni seçip yan yana dağılım karşılaştırması (ör. İlçe ↔ İlçe, Yaş ↔ Yıllık satış aralığı); ortak etiketler (İlçe, ürünler) tam eşleşme üretir + dağılım benzerliği testi + ortak kırılımda sayısal kutu grafiği |
 | 🏭 Bayi Analizi | Firma profili, çoklu seçimler, SSH değerlendirmesi |
 | 💬 Açık Uçlu | Serbest yanıtların kayıt bazında listesi |
 
@@ -44,6 +45,9 @@ Tarayıcı otomatik açılır (varsayılan `http://localhost:8501`). İnternet g
 - Makine yaşı × Arıza sıklığı; Kullanım saati × Bakım maliyeti (korelasyon)
 - Likert ölçek puanları × Demografik kırılımlar
 - Bayi: **Termin nakliye tutarı** × yıllık satış aralığı (Sayısal × Grup sekmesi)
+- **Çiftçi ↔ Bayi:** Serbest değişken seçimiyle iki anketin dağılım karşılaştırması + homojenlik testi (Çiftçi ↔ Bayi sekmesi)
+- **Serbest alan çaprazları:** Traktör markası × İlçe, Model × Eğitim, Bayi: Satılan markalar × Yıllık satış (Çapraz Analiz sekmesindeki seçicilerde)
+- Sayısal × Grup sekmesinde kapsam: Çiftçi / Bayi / **İkisi birlikte (birleşik)** — birleşik modda iki anket aynı grafikte anket bazlı renkle karşılaştırılır
 
 ## Veri Güvenliği
 

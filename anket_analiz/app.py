@@ -85,9 +85,9 @@ if _logo_items:
 TABS = [
     "🏠 Genel Bakış", "📝 Veri Girişi", "🗂 Kayıtlar",
     "📊 Tek Değişken", "🔀 Çapraz Analiz", "📈 Sayısal × Grup",
-    "🔗 Korelasyon", "🧾 Likert / Güvenilirlik", "🏭 Bayi Analizi", "💬 Açık Uçlu",
+    "🔗 Korelasyon", "🧾 Likert / Güvenilirlik", "🤝 Çiftçi ↔ Bayi", "🏭 Bayi Analizi", "💬 Açık Uçlu",
 ]
-tab_overview, tab_input, tab_records, tab_freq, tab_cross, tab_num, tab_corr, tab_likert, tab_bayi, tab_open = st.tabs(TABS)
+tab_overview, tab_input, tab_records, tab_freq, tab_cross, tab_num, tab_corr, tab_likert, tab_pair, tab_bayi, tab_open = st.tabs(TABS)
 
 # Her sekme kendi verisini yükler
 CDF = D.load_df("ciftci")
@@ -428,7 +428,9 @@ with tab_cross:
             labels = S.label_map(kind)
             singles = list(S.FARMER_SINGLE) if kind == "ciftci" else list(S.BAYI_SINGLE)
             multis = list(S.FARMER_MULTI) if kind == "ciftci" else list(S.BAYI_MULTI)
-            all_cat = singles + multis
+            # Serbest alanlar: kategorik seçenek listesi olmayan ama çaprazlanabilir metin alanları
+            free = (["traktor_marka", "traktor_model"] if kind == "ciftci" else ["satilan_markalar"])
+            all_cat = singles + multis + free
 
             def fmt(c):
                 return labels.get(c, c) + (" (çoklu)" if S.is_multi(kind, c) else "")
@@ -522,24 +524,69 @@ with tab_num:
     if N_C == 0 and N_B == 0:
         empty_state("Önce veri girin.")
     else:
-        scope = st.radio("Anket", ["Çiftçi", "Bayi"], horizontal=True, key="num_scope")
-        kind = "ciftci" if scope == "Çiftçi" else "bayi"
-        df = CDF if kind == "ciftci" else BDF
-        if len(df) == 0:
-            empty_state(f"{scope} kaydı yok.")
+        scope = st.radio(
+            "Kapsam", ["Çiftçi", "Bayi", "İkisi birlikte (birleşik)"], horizontal=True, key="num_scope")
+        unified = scope.startswith("İkisi")
+        kind = "bayi" if scope == "Bayi" else "ciftci"
+        df = BDF if scope == "Bayi" else CDF
+        if (unified and N_C == 0 and N_B == 0) or (not unified and len(df) == 0):
+            empty_state(f"{scope if not unified else 'Çiftçi ve bayi'} kaydı yok.")
         else:
             labels = S.label_map(kind)
-            num_cols = ([c for c, _, _ in S.FARMER_NUMERIC] if kind == "ciftci"
-                        else [c for c, _, _ in S.BAYI_NUMERIC])
-            num_cols += S.likert_columns(kind)
-            num_cols = [c for c in num_cols if c in df.columns and pd.to_numeric(df[c], errors="coerce").notna().sum() >= 3]
-            cat_cols = (list(S.FARMER_SINGLE) if kind == "ciftci" else list(S.BAYI_SINGLE))
+            c_nums = [c for c, _, _ in S.FARMER_NUMERIC] + S.likert_columns("ciftci")
+            b_nums = [c for c, _, _ in S.BAYI_NUMERIC] + S.likert_columns("bayi")
+            c_cats, b_cats = list(S.FARMER_SINGLE), list(S.BAYI_SINGLE)
+            if unified:
+                def _has(dfin, col, min_n=3):
+                    return col in dfin.columns and pd.to_numeric(dfin[col], errors="coerce").notna().sum() >= min_n
+
+                num_cols = [c for c in c_nums if _has(CDF, c) or _has(BDF, c)]
+                cat_cols = list(dict.fromkeys(c_cats + b_cats))
+            else:
+                base = c_nums if kind == "ciftci" else b_nums
+                num_cols = [c for c in base if c in df.columns and pd.to_numeric(df[c], errors="coerce").notna().sum() >= 3]
+                cat_cols = c_cats if kind == "ciftci" else b_cats
 
             c1, c2 = st.columns(2)
             num_col = c1.selectbox("Sayısal değişken", num_cols, format_func=lambda c: labels.get(c, c))
             cat_col = c2.selectbox("Grup değişkeni", cat_cols, format_func=lambda c: labels.get(c, c))
 
-            if num_col and cat_col:
+            if unified:
+                comb, comb_note = A.combined_numeric_frames(CDF, BDF, num_col, cat_col)
+                if comb.empty:
+                    empty_state("Seçilen değişkenlerde hesaplanacak sayısal veri yok. "
+                                + (comb_note or ""))
+                else:
+                    if comb_note:
+                        st.caption("ℹ️ " + comb_note)
+                    stats_tab = A.combined_group_stats(comb)
+                    stats_tab["Grup"] = stats_tab["Anket"] + " · " + stats_tab["Grup"]
+                    st.markdown(f"**{labels.get(num_col, num_col)}** — **{labels.get(cat_col, cat_col)}** gruplarına göre (Çiftçi + Bayi birleşik)")
+                    st.dataframe(stats_tab.round(2), use_container_width=True)
+
+                    tests = A.combined_group_tests(comb)
+                    has_any = any(t is not None for t in tests.values())
+                    if has_any:
+                        def _fmt(v, f="{:.2f}"):
+                            return f.format(v) if v is not None and not np.isnan(v) else "—"
+                        m1, m2, m3, m4, m5, m6 = st.columns(6)
+                        tc, tb, tu = tests["ciftci"], tests["bayi"], tests["birlesik"]
+                        m1.metric("Çiftçi ANOVA p", _fmt(tc["anova_p"], "{:.4f}") if tc else "—")
+                        m2.metric("Çiftçi KW p", _fmt(tb["kruskal_p"], "{:.4f}") if tb else "—")
+                        m3.metric("Bayi ANOVA p", _fmt(tb["anova_p"], "{:.4f}") if tb else "—")
+                        m4.metric("Bayi KW p", _fmt(tb["kruskal_p"], "{:.4f}") if tb else "—")
+                        m5.metric("Birleşik ANOVA p", _fmt(tu["anova_p"], "{:.4f}") if tu else "—")
+                        m6.metric("Birleşik KW p", _fmt(tu["kruskal_p"], "{:.4f}") if tu else "—")
+                        st.caption("Birleşik testte gruplar „anket · grup” etiketiyle ayrıştırılır; "
+                                   "çiftçi/bayi içi testler yalnızca kendi grupları arasında karşılaştırır.")
+
+                    fig = px.box(comb, x="grup", y="deger_num", color="anket", points="all",
+                                 color_discrete_sequence=PALETTE)
+                    style_fig(fig, y_title=labels.get(num_col, num_col), x_title=labels.get(cat_col, cat_col),
+                              title=f"{labels.get(num_col, num_col)} — {labels.get(cat_col, cat_col)} kırılımında (Çiftçi + Bayi)",
+                              legend_title="Anket")
+                    st.plotly_chart(fig, use_container_width=True)
+            else:
                 stats_tab, _ = A.group_numeric_stats(df, num_col, cat_col, kind)
                 if stats_tab.empty:
                     empty_state("Yeterli veri yok.")
@@ -579,8 +626,9 @@ with tab_num:
 
             st.divider()
             st.subheader("Sayısal değişkenlerin betimsel istatistikleri")
+            summary_df = pd.concat([CDF, BDF], ignore_index=True) if unified else df
             present = [c for c in num_cols]
-            desc = A.numeric_summary(df, present)
+            desc = A.numeric_summary(summary_df, present)
             if desc.empty:
                 empty_state("Henüz sayısal veri girilmemiş.")
             else:
@@ -714,6 +762,126 @@ with tab_likert:
                     style_fig(fig, y_title="Ortalama ölçek puanı", x_title=S.label_map("ciftci").get(gcol, gcol),
                               title="Ölçek puanlarının demografik kırılımı", legend_title="Ölçek")
                     st.plotly_chart(fig, use_container_width=True)
+
+# ========================================================== ÇİFTÇİ ↔ BAYİ
+with tab_pair:
+    st.header("🤝 Çiftçi ↔ Bayi Birleşik Analizi")
+    st.caption("Her iki anketten serbestçe değişken seçip yan yana dağılım karşılaştırması yapın "
+               "(ör. çiftçi yaş grubu ↔ bayi yıllık satış aralığı). Ortak kategori etiketi olan seçimler "
+               "(ör. İlçe ↔ İlçe) tam eşleşme üretir.")
+    if N_C == 0 and N_B == 0:
+        empty_state("Çiftçi ve bayi kaydı yok. Her iki anketten veri girin.")
+    else:
+        labels = S.label_map("ciftci")
+        b_labels = S.label_map("bayi")
+
+        c_all = list(S.FARMER_SINGLE) + list(S.FARMER_MULTI) + ["traktor_marka", "traktor_model"]
+        b_all = list(S.BAYI_SINGLE) + list(S.BAYI_MULTI) + ["satilan_markalar"]
+
+        def cfmt(c):
+            return labels.get(c, c) + (" (çoklu)" if S.is_multi("ciftci", c) else "")
+
+        def bfmt(c):
+            return b_labels.get(c, c) + (" (çoklu)" if S.is_multi("bayi", c) else "")
+
+        rc1, rc2 = st.columns(2)
+        ccol = rc1.selectbox("🧑‍🌾 Çiftçi değişkeni", c_all, index=0, format_func=cfmt)
+        bcol = rc2.selectbox("🏢 Bayi değişkeni", b_all, index=2, format_func=bfmt)
+
+        ccnts = A.category_counts(CDF, ccol, "ciftci")
+        bcnts = A.category_counts(BDF, bcol, "bayi")
+        if ccnts.empty or bcnts.empty:
+            empty_state("Seçilen değişkenlerde yanıt yok — veri girin veya başka değişken seçin.")
+        else:
+            st.markdown(f"**{labels.get(ccol, ccol)} (Çiftçi)** ↔ **{b_labels.get(bcol, bcol)} (Bayi)**")
+            cvals, bvals = set(ccnts.index), set(bcnts.index)
+            cvals = {v for v in cvals if str(v).lower() != "nan"}
+            bvals = {v for v in bvals if str(v).lower() != "nan"}
+            common = cvals & bvals
+
+            res = None
+            if common:
+                # Ortak etiketler var: eşleşme tablosu (benzerlik testi aşağıda, yan yana dağılımdan sonra)
+                pair_df = A.common_key_pair_counts(CDF, BDF, ccol, bcol,
+                                                   S.is_multi("ciftci", ccol), S.is_multi("bayi", bcol))
+                c1, c2 = st.columns([2, 3])
+                c1.dataframe(pair_df.set_index("Ortak Değer"), use_container_width=True)
+                fig = px.bar(pair_df, x="Ortak Değer", y=["Çiftçi (kişi)", "Bayi (firma)"], barmode="group",
+                             color_discrete_sequence=PALETTE)
+                style_fig(fig, y_title="Yanıt sayısı", legend_title="Anket")
+                fig.update_xaxes(tickangle=-20)
+                c2.plotly_chart(fig, use_container_width=True)
+                res = A.survey_comparison_test(pair_df)
+            else:
+                st.caption("ℹ️ İki sorunun kategori etiketleri örtüşmüyor (ör. yaş aralıkları ↔ satış aralıkları). "
+                           "Bu nedenle aşağıda eşleşme testi yerine **her iki dağılım yan yana** gösterilir.")
+                st.info("Not: Değerler farklı sorulardan geldiği için sayıları doğrudan karşılaştırmak "
+                        "yerine **dağılım biçimlerine** bakın (hangi kategori ağır basıyor).")
+
+            # Yan yana dağılım (ortak etiket olsa da olmasa da göster)
+            st.subheader("Yan yana dağılım")
+            cA = ccnts.rename(columns={"Sayı": "Çiftçi (kişi)"}).reset_index()
+            cA["Kategori"] = cA["Kategori"].astype(str) + " 🧑‍🌾"
+            bA = bcnts.rename(columns={"Sayı": "Bayi (firma)"}).reset_index()
+            bA["Kategori"] = bA["Kategori"].astype(str) + " 🏢"
+            side = pd.concat([
+                pd.DataFrame({"Kategori": cA["Kategori"], "Anket": "Çiftçi", "Sayı": cA["Çiftçi (kişi)"]}),
+                pd.DataFrame({"Kategori": bA["Kategori"], "Anket": "Bayi", "Sayı": bA["Bayi (firma)"]}),
+            ], ignore_index=True)
+            figs = px.bar(side, x="Kategori", y="Sayı", color="Anket", barmode="group",
+                          color_discrete_sequence=PALETTE)
+            style_fig(figs, y_title="Yanıt sayısı",
+                      title=f"{labels.get(ccol, ccol)} (Çiftçi) ve {b_labels.get(bcol, bcol)} (Bayi) dağılımları",
+                      legend_title="Anket")
+            figs.update_xaxes(tickangle=-30)
+            st.plotly_chart(figs, use_container_width=True)
+            t1, t2 = st.columns(2)
+            t1.markdown(f"**{labels.get(ccol, ccol)} — Çiftçi dağılımı**")
+            t1.dataframe(ccnts, use_container_width=True)
+            t2.markdown(f"**{b_labels.get(bcol, bcol)} — Bayi dağılımı**")
+            t2.dataframe(bcnts, use_container_width=True)
+            if common:
+                st.subheader("Dağılım benzerliği testi")
+                if res is None:
+                    st.info("Test için en az 2 ortak kategori gerekli.")
+                else:
+                    k1, k2, k3, k4 = st.columns(4)
+                    k1.metric("χ²", f"{res['chi2']:.2f}")
+                    k2.metric("sd", res["dof"])
+                    k3.metric("p değeri", f"{res['p']:.4f}")
+                    k4.metric("Cramér's V", f"{res['cramers_v']:.3f}")
+                    verdict = (" ✅ Çiftçi ve bayi dağılımları benzer (homojen; p ≥ 0.05)"
+                               if res["p"] >= 0.05 else
+                               " ⚠️ Dağılımlar farklı (p < 0.05) — çiftçi talebi ile bayi arzı arasında uyumsuzluk olabilir")
+                    st.markdown(f"**Sonuç (homojenlik testi):** {verdict}")
+                    if res["low_expected_pct"] > 20:
+                        st.caption(f"⚠️ Beklenen sayıların %{res['low_expected_pct']:.0f}'i 5'in altında — "
+                                   "sonucu yorumlarken dikkatli olun, kategori birleştirme düşünün.")
+
+        st.divider()
+        st.subheader("Sayısal karşılaştırma (birleşik)")
+        st.caption("Ortak kırılım alanı (ör. ilçe) üzerinden iki anketin sayısal değerleri yan yana "
+                   "karşılaştırılır; alanın bulunmadığı anket sessizce atlanır ve not düşülür.")
+        both_num = list(dict.fromkeys(
+            [c for c, _, _ in S.FARMER_NUMERIC] + [c for c, _, _ in S.BAYI_NUMERIC]))
+        both_cat = [c for c in S.BAYI_SINGLE if c in S.FARMER_SINGLE]
+        if not both_num or not both_cat:
+            st.info("Ortak sayısal/kırılım alanı bulunmuyor.")
+        else:
+            u1, u2 = st.columns(2)
+            u_num = u1.selectbox("Sayısal alan", both_num, format_func=lambda c: labels.get(c, b_labels.get(c, c)), key="pair_num")
+            u_cat = u2.selectbox("Grup alanı (ortak)", both_cat, format_func=lambda c: labels.get(c, c), key="pair_cat")
+            comb, note = A.combined_numeric_frames(CDF, BDF, u_num, u_cat)
+            if comb.empty:
+                empty_state("Bu seçimde hesaplanacak veri yok." + (f" ({note})" if note else ""))
+            else:
+                st.dataframe(A.combined_group_stats(comb).round(2), use_container_width=True)
+                figc = px.box(comb, x="grup", y="deger_num", color="anket", points="all",
+                              color_discrete_sequence=PALETTE)
+                style_fig(figc, y_title=labels.get(u_num, u_num), x_title=labels.get(u_cat, u_cat),
+                          title=f"{labels.get(u_num, u_num)} — {labels.get(u_cat, u_cat)} kırılımında (Çiftçi + Bayi)",
+                          legend_title="Anket")
+                st.plotly_chart(figc, use_container_width=True)
 
 # ========================================================== BAYİ ANALİZİ
 with tab_bayi:

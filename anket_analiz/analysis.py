@@ -60,6 +60,29 @@ def multi_frequency(df, col, kind):
 
 
 # ---------------------------------------------------------------- çapraz
+def category_counts(df, col, kind):
+    """Tek/çoklu fark etmeksizin kategori başına yanıt sayısı (kolon: Sayı).
+    Etiketleri örtüşmeyen anket çiftlerinde yan yana dağılım görünümü için kullanılır."""
+    if not isinstance(df, pd.DataFrame) or len(df) == 0 or col not in df.columns:
+        return pd.DataFrame()
+    if S.is_multi(kind, col):
+        ex, c = explode_multi(df, col, kind)
+        if ex.empty:
+            return pd.DataFrame()
+        vc = ex[c].value_counts()
+    else:
+        s = df[col].astype(str).str.strip()
+        vc = s[s != ""].value_counts()
+    order = S.cat_order(kind, col)
+    if order:
+        known = [o for o in order if o in vc.index]
+        extra = [o for o in vc.index if o not in order]
+        vc = vc.reindex(known + extra)
+    tab = pd.DataFrame({"Sayı": vc.astype(int)})
+    tab.index.name = "Kategori"
+    return tab
+
+
 def crosstab(df, col_row, col_col, kind):
     """İki kategorik değişken arasındaki çapraz tablo (kişi sayıları)."""
     if col_row not in df.columns or col_col not in df.columns:
@@ -153,6 +176,117 @@ def group_tests(values_by_group):
     except Exception:
         res["kruskal_H"], res["kruskal_p"] = np.nan, np.nan
     return res
+
+
+# --------------------------------- birleşik (çiftçi + bayi) analizler
+
+def _values_of(df, col, multi):
+    """Bir anketteki kategori değerlerini küme olarak döndürür (çoklu kolonu patlatır)."""
+    if not isinstance(df, pd.DataFrame) or len(df) == 0 or col not in df.columns:
+        return set()
+    if multi:
+        out = set()
+        for v in df[col].astype(str):
+            for p in v.split(","):
+                p = p.strip()
+                if p:
+                    out.add(p)
+        return out
+    s = df[col].astype(str).str.strip()
+    return set(s[s != ""])
+
+
+def common_key_pair_counts(cdf, bdf, ccol, bcol, multi_c, multi_b):
+    """Ortak kategori değerleri üzerinden çiftçi/bayi yanıt sayıları.
+    Döner: DataFrame [Ortak Değer, Çiftçi (kişi), Bayi (firma)]."""
+    cv = _values_of(cdf, ccol, multi_c)
+    bv = _values_of(bdf, bcol, multi_b)
+    common = [v for v in cv & bv if v.lower() != "nan"]
+    if not common:
+        return pd.DataFrame()
+
+    def count(df, col, multi, val):
+        if multi:
+            return int(df[col].astype(str).apply(lambda x: val in [p.strip() for p in x.split(",")]).sum())
+        return int((df[col].astype(str).str.strip() == val).sum())
+
+    rows = []
+    for v in common:
+        rows.append({
+            "Ortak Değer": v,
+            "Çiftçi (kişi)": count(cdf, ccol, multi_c, v),
+            "Bayi (firma)": count(bdf, bcol, multi_b, v),
+        })
+    return pd.DataFrame(rows)
+
+
+def survey_comparison_test(pair_df):
+    """Çiftçi ve bayi dağılımlarının homojenlik testi (2×k kişi/firma sayı tablosu)."""
+    if not isinstance(pair_df, pd.DataFrame) or pair_df.empty or len(pair_df) < 2:
+        return None
+    tab = pd.DataFrame(
+        pair_df[["Çiftçi (kişi)", "Bayi (firma)"]].T.values,
+        columns=pair_df["Ortak Değer"].astype(str).tolist(),
+        index=["Çiftçi", "Bayi"],
+    )
+    return chi2_test(tab)
+
+
+def combined_numeric_frames(cdf, bdf, num_col, cat_col):
+    """Çiftçi + bayi verilerini tek tabloda birleştirir.
+    Döner: (birleşik df [anket, grup, deger_num], not)."""
+    frames, skipped = [], []
+    for name, df in (("Çiftçi", cdf), ("Bayi", bdf)):
+        if not (isinstance(df, pd.DataFrame) and len(df)):
+            continue
+        missing = [c for c in (num_col, cat_col) if c not in df.columns]
+        if missing:
+            skipped.append(f"{name} anketinde {', '.join(missing)} alanı yok")
+            continue
+        sub = df[list(dict.fromkeys([num_col, cat_col]))].copy()
+        sub["anket"] = name
+        sub["grup"] = sub[cat_col].astype(str).str.strip()
+        sub["deger_num"] = pd.to_numeric(sub[num_col], errors="coerce")
+        sub = sub[sub["deger_num"].notna() & (sub["grup"] != "") & (sub["grup"].str.lower() != "nan")]
+        frames.append(sub[["anket", "grup", "deger_num"]])
+    if not frames:
+        return pd.DataFrame(), "Seçilen değişkenlerde veri bulunmuyor."
+    comb = pd.concat(frames, ignore_index=True)
+    note = ("Birleşik görünümde yalnızca " + " ve ".join(comb["anket"].unique()) + " verisi var — "
+            + "; ".join(skipped) + ".") if skipped else ""
+    return comb, note
+
+
+def combined_group_stats(comb):
+    """Birleşik değerlerde anket × grup kırılımında özet istatistik."""
+    if not isinstance(comb, pd.DataFrame) or comb.empty:
+        return pd.DataFrame()
+    rows = []
+    for (anket, grup), sub in comb.groupby(["anket", "grup"], sort=False):
+        rows.append({
+            "Anket": anket, "Grup": grup, "n": len(sub),
+            "Ortalama": sub["deger_num"].mean(),
+            "SS": sub["deger_num"].std(ddof=1) if len(sub) > 1 else np.nan,
+            "Medyan": sub["deger_num"].median(),
+            "Min": sub["deger_num"].min(), "Maks": sub["deger_num"].max(),
+        })
+    return pd.DataFrame(rows)
+
+
+def combined_group_tests(comb):
+    """Test seti: çiftçi içi, bayi içi ve birleşik (anket×grup) karşılaştırmalar."""
+    if not isinstance(comb, pd.DataFrame) or comb.empty:
+        return {"ciftci": None, "bayi": None, "birlesik": None}
+
+    def tests_for(sub):
+        groups = {g: s["deger_num"].values for g, s in sub.groupby("grup")}
+        return group_tests(groups) if len(groups) >= 2 else None
+
+    return {
+        "ciftci": tests_for(comb[comb["anket"] == "Çiftçi"]),
+        "bayi": tests_for(comb[comb["anket"] == "Bayi"]),
+        "birlesik": tests_for(comb.assign(grup=comb["anket"] + " · " + comb["grup"])),
+    }
 
 
 # ---------------------------------------------------------------- korelasyon
