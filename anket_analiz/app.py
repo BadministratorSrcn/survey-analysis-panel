@@ -13,6 +13,14 @@ import analysis as A
 import data_store as D
 import demo_data as DEMO
 import survey_schema as S
+import os
+
+LOGO_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "logos")
+LOGOS = [
+    ("dicle_universitesi.png", "Dicle Üniversitesi"),
+    ("ziraat_fakultesi.png", "Ziraat Fakültesi"),
+    ("muhendislik_fakultesi.png", "Mühendislik Fakültesi"),
+]
 
 st.set_page_config(page_title="Anket Analiz Paneli", page_icon="🌾", layout="wide")
 
@@ -53,6 +61,26 @@ st.caption(
     "Diyarbakır İlinde Bayiler Aracılığıyla Temin Edilen Tarım Makinalarının Çiftçilere "
     "Teknik ve Ekonomik Etkilerinin Değerlendirilmesi — veri girişi ve çapraz analiz"
 )
+
+# Logo şeridi (Dicle Üniversitesi · Ziraat Fakültesi · Mühendislik Fakültesi)
+_logo_items = ""
+for _fname, _caption in LOGOS:
+    _path = os.path.join(LOGO_DIR, _fname)
+    if os.path.exists(_path):
+        import base64
+        with open(_path, "rb") as _f:
+            _b64 = base64.b64encode(_f.read()).decode()
+        _logo_items += (
+            f'<div style="text-align:center; padding:0 18px;">'
+            f'<img src="data:image/png;base64,{_b64}" style="height:96px; display:block; margin:0 auto;">'
+            f'</div>'
+        )
+if _logo_items:
+    st.markdown(
+        f'<div style="display:flex; justify-content:flex-start; align-items:center; '
+        f'flex-wrap:wrap; margin:2px 0 6px 0;">{_logo_items}</div>',
+        unsafe_allow_html=True,
+    )
 
 TABS = [
     "🏠 Genel Bakış", "📝 Veri Girişi", "🗂 Kayıtlar",
@@ -139,6 +167,16 @@ with tab_input:
     mode = st.radio("Anket türü", ["👨‍🌾 Çiftçi Anketi", "🏢 Bayi Anketi"], horizontal=True)
     kind = "ciftci" if mode.startswith("👨") else "bayi"
 
+    # Arazi tipi formun DIŞINDA tutulur: Sulu/Kuru seçimine göre sulama soruları
+    # anlık olarak açılıp kapanır (Streamlit form içi koşullu gösterimi desteklemez).
+    arazi_tipi = ""
+    if kind == "ciftci":
+        arazi_tipi = st.selectbox(
+            "Arazi Tipi * — Sulu veya Karışık seçilirse sulama soruları açılır",
+            [""] + S.FARMER_SINGLE["arazi_tipi"]["options"],
+            key="ciftci_arazi_tipi_outer",
+        )
+
     with st.form(f"form_{kind}", clear_on_submit=True):
         rec = {}
 
@@ -165,12 +203,23 @@ with tab_input:
                                             key=f"{kind}_{key}")
 
         if kind == "ciftci":
+            sulama_goster = arazi_tipi in ("Sulu", "Karışık (sulu + kuru)")
+            if sulama_goster:
+                sulama_notu = ""
+            elif arazi_tipi == "Kuru":
+                sulama_notu = " — *(Kuru arazi seçildiği için uygulanmaz)*"
+            else:
+                sulama_notu = " — *(Sulu veya Karışık seçildiğinde açılır)*"
             st.markdown("---")
-            st.markdown("**Sulama**")
+            st.markdown(f"**Sulama**{sulama_notu}")
             cols = st.columns(3)
             for j, key in enumerate(["sulama_kaynagi", "sulama_temin", "sulama_sekli"]):
                 spec = singles[key]
-                rec[key] = cols[j].selectbox(spec["label"], [""] + spec["options"], key=f"{kind}_{key}")
+                if sulama_goster:
+                    rec[key] = cols[j].selectbox(spec["label"], [""] + spec["options"], key=f"{kind}_{key}")
+                else:
+                    rec[key] = ""
+                    cols[j].caption("— (kuru arazi)")
 
             st.markdown("**Traktör bilgileri**")
             t1, t2, t3, t4 = st.columns(4)
@@ -208,10 +257,11 @@ with tab_input:
 
         if kind == "bayi":
             st.markdown("---")
-            b1, b2 = st.columns(2)
+            b1, b2, b3 = st.columns(3)
             rec["satilan_markalar"] = b1.text_input("Satılan Markalar")
             rec["kurulus_yili"] = b2.text_input("Kuruluş Yılı")
-            rec["calisan_sayisi"] = st.text_input("Çalışan Sayısı")
+            rec["calisan_sayisi"] = b3.text_input("Çalışan Sayısı")
+            rec["termin_nakliye_tutari"] = st.text_input("Termin Nakliye Tutarı (TL) — makine başına nakliye bedeli")
 
         st.markdown("---")
         st.markdown("**Likert ifadeleri (1 = Hiç katılmıyorum … 5 = Tamamen katılıyorum)**")
@@ -233,8 +283,10 @@ with tab_input:
         submitted = st.form_submit_button("💾 Kaydı Ekle", use_container_width=True, type="primary")
 
     if submitted:
-        if kind == "ciftci" and (not rec.get("yas_grubu") or not rec.get("egitim") or not rec.get("ilce")):
-            st.error("Zorunlu alanlar (Yaş, Eğitim, İlçe) boş bırakılamaz.")
+        if kind == "ciftci":
+            rec["arazi_tipi"] = arazi_tipi  # form dışında seçildiği için buraya ekleniyor
+        if kind == "ciftci" and (not rec.get("yas_grubu") or not rec.get("egitim") or not rec.get("ilce") or not arazi_tipi):
+            st.error("Zorunlu alanlar (Yaş, Eğitim, İlçe, Arazi Tipi) boş bırakılamaz.")
         else:
             rec = {k: ("" if v is None else str(v).strip()) for k, v in rec.items()}
             rid = D.add_record(kind, rec)

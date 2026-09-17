@@ -35,6 +35,15 @@ for kind in ("ciftci", "bayi"):
     check(f"{kind} etiket haritası tüm kolonları kapsıyor", set(cols) == set(lm))
     check(f"{kind} yedek kolonları tanımlı", set(D.STORE_COLS[kind]) == set(["kayit_id", "kayit_zamani"] + cols))
 
+print("[1b] Yeni alanlar (arazi tipi, ürünler, termin nakliye)")
+check("arazi_tipi şemada", "arazi_tipi" in S.FARMER_SINGLE)
+check("arazi_tipi seçenekleri", S.FARMER_SINGLE["arazi_tipi"]["options"] == ["Sulu", "Kuru", "Karışık (sulu + kuru)"])
+for p in ("Arpa", "Yem Bitkisi", "Şeker Pancarı"):
+    check(f"ürün listesinde {p}", p in S.FARMER_MULTI["urunler"]["options"])
+    check(f"bayi ürün yöneliminde {p}", p in S.BAYI_SINGLE["urun_yonelim"]["options"])
+check("termin_nakliye_tutarı şemada", any(c == "termin_nakliye_tutari" for c, _, _ in S.BAYI_NUMERIC))
+check("termin_nakliye_tutarı bayi kolonlarında", "termin_nakliye_tutari" in S.all_columns("bayi"))
+
 print("[2] Veri saklama (geçici kayıt)")
 rid = D.add_record("ciftci", {"yas_grubu": "31-40", "egitim": "Lise", "ilce": "Bismil", "urunler": "Pamuk, Mısır"})
 check("kayıt eklendi", rid is not None)
@@ -51,6 +60,11 @@ print("[3] Demo veri üretimi")
 rows = DEMO.generate_ciftci(30)
 check("30 demo çiftçi üretildi", len(rows) == 30)
 check("demo alanları semada", set(rows[0]) <= set(S.all_columns("ciftci")))
+check("demo arazi_tipi dolu", all(r.get("arazi_tipi") in ("Sulu", "Kuru", "Karışık (sulu + kuru)") for r in rows))
+kuru_rows = [r for r in rows if r["arazi_tipi"] == "Kuru"]
+check("Kuru arazide sulama alanları boş", all(r["sulama_kaynagi"] == "" and r["sulama_sekli"] == "" for r in kuru_rows))
+bayi_demo = DEMO.generate_bayi(5)
+check("bayi demo termin nakliye dolu", all(str(r.get("termin_nakliye_tutari", "")) != "" for r in bayi_demo))
 
 print("[4] Analiz fonksiyonları (demo veri ile)")
 cdf = pd.DataFrame(rows)

@@ -33,6 +33,7 @@ FARMER_SINGLE = {
     "egitim": {"label": "Eğitim Durumu", "options": ["İlkokul", "Ortaokul", "Lise", "Üniversite", "Lisansüstü"], "required": True},
     "ilce": {"label": "İlçe", "options": DISTRICTS, "required": True},
     "arazi_sinifi": {"label": "Toplam İşlenen Arazi Büyüklüğü", "options": ["0-50 da", "51-100 da", "101-250 da", "251-500 da", "500+ da"]},
+    "arazi_tipi": {"label": "Arazi Tipi", "options": ["Sulu", "Kuru", "Karışık (sulu + kuru)"], "required": True},
     "sulama_kaynagi": {"label": "Sulama Suyu Kaynağı", "options": ["Kuyudan", "Kanaldan", "Barajdan"]},
     "sulama_temin": {"label": "Sulama Suyunu Temin Şekli", "options": ["Dalgıç Pompa", "Santrifüj Pompa", "Kanal Suyu", "Diğer"]},
     "sulama_sekli": {"label": "Sulama Şekli", "options": ["Salma", "Yağmurlama", "Damlama", "Karma"]},
@@ -44,7 +45,7 @@ FARMER_SINGLE = {
 }
 
 FARMER_MULTI = {
-    "urunler": {"label": "Yetiştirilen Ürünler", "options": ["Pamuk", "Mısır", "Buğday", "Çeltik", "Mercimek", "Nohut", "Diğer"]},
+    "urunler": {"label": "Yetiştirilen Ürünler", "options": ["Pamuk", "Mısır", "Buğday", "Arpa", "Çeltik", "Mercimek", "Nohut", "Yem Bitkisi", "Şeker Pancarı", "Diğer"]},
     "makineler": {"label": "Sahip Olunan Makineler", "options": [
         "Traktör", "Ekim makinesi", "Hassas (havalı) ekim makinesi", "Pulluk", "Diskaro",
         "Kültüvatör", "Rotovatör", "Pülverizatör", "Gübre dağıtma makinesi",
@@ -126,7 +127,7 @@ BAYI_SINGLE = {
     "ilce": {"label": "Firmanın Bulunduğu İlçe", "options": DISTRICTS},
     "yetkili_servis": {"label": "Yetkili Servis Var mı?", "options": EVET_HAYIR},
     "yillik_satis": {"label": "Yılda Yaklaşık Satılan Makine Sayısı", "options": ["0-50", "51-100", "101-150", "151-200", "200+"]},
-    "urun_yonelim": {"label": "Satışların Yönlendiği Ürün", "options": ["Pamuk", "Mısır", "Buğday", "Mercimek", "Nohut", "Çeltik", "Karma"]},
+    "urun_yonelim": {"label": "Satışların Yönlendiği Ürün", "options": ["Pamuk", "Mısır", "Buğday", "Arpa", "Mercimek", "Nohut", "Çeltik", "Yem Bitkisi", "Şeker Pancarı", "Karma"]},
 }
 
 BAYI_MULTI = {
@@ -155,6 +156,7 @@ BAYI_MULTI = {
 BAYI_NUMERIC = [
     ("kurulus_yili", "Kuruluş Yılı", ""),
     ("calisan_sayisi", "Çalışan Sayısı", "kişi"),
+    ("termin_nakliye_tutari", "Termin Nakliye Tutarı", "TL"),
 ]
 
 BAYI_LIKERT = {

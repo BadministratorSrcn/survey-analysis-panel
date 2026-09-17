@@ -5,6 +5,8 @@
 
 Anket sorularına birebir uygun veri girişi ve tez için hazır istatistiksel çapraz analizler sunan **yerel (offline)** uygulama.
 
+![Dicle Üniversitesi](logos/dicle_universitesi.png) · ![Ziraat Fakültesi](logos/ziraat_fakultesi.png) · ![Mühendislik Fakültesi](logos/muhendislik_fakultesi.png)
+
 ## Kurulum ve Çalıştırma
 
 ```bash
@@ -16,7 +18,7 @@ Tarayıcı otomatik açılır (varsayılan `http://localhost:8501`). İnternet g
 
 ## Kullanım Akışı
 
-1. **📝 Veri Girişi** — Anket formunu doldurup kaydedin. Yaş, eğitim ve ilçe zorunludur; diğer alanlar opsiyoneldir. Her kayıt anında `data/` klasöründeki CSV'ye yazılır.
+1. **📝 Veri Girişi** — Anket formunu doldurup kaydedin. Yaş, eğitim, ilçe ve **arazi tipi** zorunludur; diğer alanlar opsiyoneldir. **Arazi tipi "Kuru" seçilirse sulama soruları formda görünmez** ve boş kaydedilir; "Sulu" veya "Karışık" seçilirse sulama bölümü (kaynak / temin şekli / sulama şekli) açılır. Her kayıt anında `data/` klasöründeki CSV'ye yazılır.
 2. **🗂 Kayıtlar** — Kayıtları görüntüleyin, düzenleyin, silin; gerekirse 60 çiftçi + 10 bayi örnek veriyle deneyin.
 3. **Analiz sekmeleri:**
 
@@ -33,13 +35,15 @@ Tarayıcı otomatik açılır (varsayılan `http://localhost:8501`). İnternet g
 
 ## Tez İçin Hazır Çapraz Analiz Örnekleri
 
-- İlçe × Yetiştirilen ürün (bölgesel ürün deseni)
+- İlçe × Yetiştirilen ürün (bölgesel ürün deseni; Pamuk, Mısır, Buğday, **Arpa**, Çeltik, Mercimek, Nohut, **Yem Bitkisi**, **Şeker Pancarı**)
 - Eğitim / yaş × Teknik servis memnuniyeti
 - Arazi büyüklüğü × Traktör gücü, × Tercih nedenleri
+- **Arazi tipi (Sulu/Kuru/Karışık) × Sulama şekli, × Ürün deseni**
 - Sulama şekli × Ürün deseni
 - Yaş grubu × Arıza sıklığı, Yakıt tüketimi (ANOVA/KW)
 - Makine yaşı × Arıza sıklığı; Kullanım saati × Bakım maliyeti (korelasyon)
 - Likert ölçek puanları × Demografik kırılımlar
+- Bayi: **Termin nakliye tutarı** × yıllık satış aralığı (Sayısal × Grup sekmesi)
 
 ## Veri Güvenliği
 

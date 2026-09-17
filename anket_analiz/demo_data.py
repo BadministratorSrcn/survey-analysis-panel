@@ -37,14 +37,18 @@ def generate_ciftci(n=60):
                 + ({"18-30": 1, "31-40": 0.5, "41-50": 0, "51-60": -0.5, "60+": -1}[age]))
         urunler = _pick(S.FARMER_MULTI["urunler"]["options"], n=random.randint(1, 3))
         traktor_guc = _num(45, 120) if has_tractor else ""
+        # Arazi tipi: sulu ağırlıklı (Diyarbakır ovası); Kuru ise sulama alanları boş kalır
+        arazi_tipi = _pick(["Sulu", "Sulu", "Karışık (sulu + kuru)", "Kuru"])
+        sulu = arazi_tipi in ("Sulu", "Karışık (sulu + kuru)")
         rows.append({
             "ad_soyad": "", "koy": "", "iletisim": "",
             "yas_grubu": age, "egitim": edu, "ilce": ilce, "arazi_sinifi": arazi,
-            "sulu_da": _num(10, 400) if arazi != "0-50 da" else _num(0, 40),
-            "kuru_da": _num(20, 800),
-            "sulama_kaynagi": _pick(S.FARMER_SINGLE["sulama_kaynagi"]["options"]),
-            "sulama_temin": _pick(S.FARMER_SINGLE["sulama_temin"]["options"]),
-            "sulama_sekli": _pick(S.FARMER_SINGLE["sulama_sekli"]["options"]),
+            "arazi_tipi": arazi_tipi,
+            "sulu_da": _num(10, 400) if sulu else "",
+            "kuru_da": _num(20, 800) if arazi_tipi != "Sulu" else _num(0, 40),
+            "sulama_kaynagi": _pick(S.FARMER_SINGLE["sulama_kaynagi"]["options"]) if sulu else "",
+            "sulama_temin": _pick(S.FARMER_SINGLE["sulama_temin"]["options"]) if sulu else "",
+            "sulama_sekli": _pick(S.FARMER_SINGLE["sulama_sekli"]["options"]) if sulu else "",
             "urunler": ", ".join(urunler),
             "makineler": ", ".join(_pick(S.FARMER_MULTI["makineler"]["options"], n=random.randint(2, 6))),
             "traktor_marka": _pick(["Massey Ferguson", "New Holland", "Ford", "Case IH", "Tümosan", "Deutz"]) if has_tractor else "",
@@ -90,6 +94,7 @@ def generate_bayi(n=10):
             "satilan_markalar": ", ".join(_pick(["Massey Ferguson", "New Holland", "Case IH", "Tümosan", "Deutz", "Landini"], 2)),
             "kurulus_yili": random.randint(1990, 2022),
             "calisan_sayisi": _num(3, 40),
+            "termin_nakliye_tutari": _num(5_000, 150_000),
             "yetkili_servis": _pick(S.EVET_HAYIR),
             "acma_nedeni": ", ".join(_pick(S.BAYI_MULTI["acma_nedeni"]["options"], n=random.randint(1, 2))),
             "satilan_makineler": ", ".join(_pick(S.BAYI_MULTI["satilan_makineler"]["options"], n=random.randint(2, 5))),
